@@ -32,7 +32,8 @@ been built or measured. Section 10 lists what could not be verified.
    site on the board never connects to a DropBot channel, so most of the
    changeover relays disappear (sections 3.1 and 4.1). The price is that a
    board house's minimum gap is larger than a cell, so the signal is small
-   and the measurement has to be differential.
+   and the measurement has to be differential. Section 3.2 checks each
+   dimension against what board houses publish.
 
 ## 2. What the existing hardware does
 
@@ -149,25 +150,28 @@ with Parylene by the board house and with spin-coated Cytop on top. Numbers
 are from `pcb_sense_site()` in `sim/tia_design.py`.
 
 **The gap is set by the board house.** Two copper traces facing each other
-across the minimum space form the sense pair. The 35 µm copper thickness
-helps: the trench between the traces is a region of nearly uniform field that
-a settled cell can sit in.
+across the minimum space form the sense pair. The copper thickness helps: the
+trench between the traces is a region of nearly uniform field that a settled
+cell can sit in. Finer spacing needs thinner copper, so the trench gets
+shallower as the gap shrinks.
 
-| Gap | Typical board class | Resistance in PBS | Upper bound on change from one cell: 10 / 15 / 20 µm |
+| Gap | Copper | Fabrication class | Upper bound on change from one cell: 10 / 15 / 20 µm |
 |---|---|---|---|
-| 100 µm | standard (4 mil) | 5.2 kΩ | 0.06 / 0.21 / 0.49 % |
-| 75 µm | standard (3 mil) | 4.6 kΩ | 0.10 / 0.32 / 0.77 % |
-| 50 µm | HDI (2 mil) | 3.7 kΩ | 0.17 / 0.59 / 1.40 % |
-| 25 µm | specialist | 2.3 kΩ | 0.44 / 1.49 / 3.53 % |
+| 127 µm | 35 µm | 2-layer prototype (5 mil) | 0.04 / 0.14 / 0.33 % |
+| 100 µm | 35 µm | standard multilayer (4 mil) | 0.06 / 0.21 / 0.49 % |
+| 90 µm | 35 µm | prototype multilayer (3.5 mil) | 0.07 / 0.25 / 0.58 % |
+| 75 µm | 35 µm | advanced tier (3 mil) | 0.10 / 0.32 / 0.77 % |
+| 50 µm | 18 µm | HDI, thin copper (2 mil) | 0.24 / 0.82 / 1.95 % |
+| 30 µm | 15 µm | mSAP, substrate-like | 0.58 / 1.96 / 4.65 % |
 
 Assumes a 150 µm facing length and a cell centred in the gap. Real values
-will be several times lower. Ask the board house for its true minimum space on
-the outer layer at the copper weight you choose.
+will be several times lower. The site resistance in PBS is about 5 kΩ in
+every row.
 
-**Noise is not the limit, drift is.** At 0.2 V rms a 75 µm site carries about
-40 µA, so 0.1 % is 40 nA against a 60 pA noise floor. But 0.1 % is also what
-a 0.05 °C temperature change does to the electrolyte. A single pair cannot
-tell the two apart. Use three electrodes:
+**Noise is not the limit, drift is.** At 0.2 V rms a 90 µm site carries about
+40 µA, so 0.07 % is 28 nA against a 60 pA noise floor. But 0.07 % is also
+what a 0.035 °C temperature change does to the electrolyte. A single pair
+cannot tell the two apart. Use three electrodes:
 
 ```
    ┌─────────┐  gap  ┌──────┐  gap  ┌─────────┐
@@ -182,53 +186,85 @@ does not. The static imbalance between the gaps is measured once with a
 cell-free droplet. This needs a second amplifier channel (section 6.3) and
 uses both scope inputs (section 7).
 
-**Parylene must not cover the sense site.** Coupling through 5 µm of
-Parylene is 5.5 pF/mm², which on electrodes this small hides the liquid
-completely at every frequency the Analog Discovery reaches. Either have the coater mask the site (tape masks are
-accurate to about a millimetre, so the window will be large) or have a small
-window laser-ablated afterwards. Surround the window with a grounded guard
-trace so that no actuation electrode edge is inside it.
+**The sense traces must be bare where they face each other.**
 
-**Cytop over the sense site is acceptable only with enough area.** A 100 nm
-Cytop film couples at 186 pF/mm². For its reactance to stay under 5 kΩ each
-electrode needs this much wetted area:
+- Parylene must not cover them. Coupling through 5 µm of Parylene is
+  5.5 pF/mm², which on traces this small hides the liquid completely at every
+  frequency the Analog Discovery reaches.
+- Cytop should not cover them either. A 100 nm Cytop film couples at
+  186 pF/mm², and a 100 µm × 150 µm trace offers about 0.02 mm². That is
+  enough only near 10 MHz. Adding area to improve the coupling does not
+  help: at low frequency the current then spreads over the whole added area
+  instead of crossing the gap, and the cell-sized sensing volume is lost.
+- The cleanest way to get there is to apply both coatings over the whole
+  board and then have a window of about 0.5 mm × 0.25 mm laser-ablated over
+  the three traces. Tape masking during coating is accurate to about a
+  millimetre and cannot do this.
+- Keep the window edge at least 50 µm inside the site, so that the
+  surrounding actuation electrode keeps its Parylene. That electrode is
+  grounded whenever it is off, and acts as the guard for the site.
+- A bare site is hydrophilic. It will pin the droplet and may keep a small
+  volume behind when the droplet leaves. Keep the window small.
 
-| Frequency | Wetted area per electrode |
-|---|---|
-| 0.5 MHz | 0.34 mm² |
-| 1 MHz | 0.17 mm² |
-| 5 MHz | 0.034 mm² |
-| 10 MHz | 0.017 mm² |
+### 3.2 Can a board house make it?
 
-A 100 µm trace with a 150 µm facing edge offers about 0.02 mm², enough only
-at 10 MHz. For the low-frequency half of a dual-frequency measurement, widen
-each sense electrode behind its tip into a pad of 0.2–0.4 mm², or keep Cytop
-off the sense electrodes and use them as bare gold. Thicker Cytop needs
-proportionally more area, and spin coating over 35 µm copper steps will not
-give a uniform film, so measure rather than assume.
+Checked against the geometry in this repository and against published
+capability tables (JLCPCB and PCBWay, as examples of prototype services).
 
-**Board stack-up.**
+| Feature | Size | Finding | Verdict |
+|---|---|---|---|
+| Board outline | 76.0 × 50.8 mm, 1.6 mm thick | Taken from the connection adapter board, which is made to sit where the chip does | Possible |
+| Pogo-pin pads | 1.9 mm square, 2.54 mm pitch, 4 columns × 17 rows on each side | Far above any minimum | Possible |
+| Electrode array area | 54 mm clear between the two pad fields | The standard chip's array is about 50 mm across | Possible |
+| Actuation electrodes | about 2.2 mm (standard chip: 2.2–2.35 mm, the drawing's scale is ambiguous) | Trivial | Possible |
+| Gap between actuation electrodes | standard glass chip: about 30 µm | Not reproducible on a board. Expect 90–100 µm. Published board-based devices move droplets across 50–140 µm gaps, at a higher voltage | Possible, with a voltage penalty |
+| Sense trace width | 100 µm | Minimum is 90 µm (JLCPCB, 4–6 layers, 1 oz) or 100 µm (PCBWay standard). JLCPCB 2-layer boards need 127 µm | Possible on 4 or more layers |
+| Sense gap | 90–100 µm | Same limits as trace width | Possible |
+| Sense gap | 75 µm | Advanced tier only (PCBWay lists 3 mil) | Possible, ask for a quote |
+| Sense gap | 50 µm | Listed at 2 mil for part of a board, with thin base copper (down to 12 µm) | Possible at HDI cost, confirm first |
+| Sense gap | 25–30 µm | Needs a semi-additive (mSAP) process. Not offered by prototype services | Not practical on the board. Use the top plate |
+| Copper thickness | 35 µm finished | Standard 1 oz. Capped via-in-pad adds plating to the outer layer | Possible. Ask whether it changes the minimum space |
+| Filled, capped via in every electrode | 0.15–0.2 mm drill, 0.30–0.35 mm pad | Offered as standard, at no charge on 6 or more layers at JLCPCB | Possible |
+| Via pad on each sense trace | 0.35 mm | Wider than the 100 µm trace, so each trace ends in a pad outside the window | Possible, sets the site size |
+| Whole sense site | about 1.0 × 1.0 mm | 21 % of a 2.2 mm electrode, 11 % of a 3.0 mm one | Fits. A 3 mm electrode at the site is more comfortable |
+| Coating window | about 0.5 × 0.25 mm, placed to ±50 µm | Laser ablation of Parylene is an established process, but no vendor was checked | Unverified |
+| Layer count | 6 | Standard | Possible |
 
-- Route the three sense lines on an inner layer between two ground planes,
-  from the site to their own connector. This shields them from the 150 V
-  actuation edges on the electrode layer.
+Three things to raise with the board house, because the tables do not answer
+them:
+
+1. Whether the minimum space is measured at the foot or the top of the
+   copper. Etched copper has sloped walls, so a 90 µm gap at the foot is
+   wider at the top.
+2. How much the gold finish narrows the gap. Electroless nickel grows
+   sideways as well as up, by several micrometres per side.
+3. Whether the gold finish will survive saline. Standard immersion gold is
+   thin and porous. Ask for ENEPIG or hard gold if offered.
+
+The actuation voltage is a separate risk. One published board-based device
+needed 220 V to start droplets moving; others with smoother surfaces worked
+below 100 V. The DropBot stops at about 140 V. Wider gaps, rougher copper
+and thicker Parylene all push the requirement up.
+
+### 3.3 Board layout
+
+- Use six layers: electrodes and pads, ground, actuation routing, ground,
+  sense routing, ground. This puts the three sense lines between two ground
+  planes, shielded from the 150 V actuation edges, and makes capped
+  via-in-pad a standard option.
+- Bring the sense lines out through their own small connector. The DropBot's
+  four spare pogo pins give only two nets, one short of three. Whether a
+  connector clears the DropBot's chip drawer was not checked; if it does
+  not, run the board outside the instrument on the connection adapter.
 - Keep the top-plate (`FB`) connection away from every electrode trace.
   Capacitance between them adds to every DropBot reading.
-- Use filled and capped vias in the electrode pads, the thinnest outer copper
-  the board house offers for the actuation area, and a gold finish (ENIG) so
-  the sense electrodes are inert.
-- The pad pattern that the DropBot's pogo pins expect is in
-  `hardware/external-connection-adapter` (`dropbot-v3-connection-adapter.kicad_pcb`).
-  It includes the `FB`, `OE` and `GND` pads.
-- The DropBot's four spare pogo pins give only two nets, one short of the
-  three a differential site needs. Bring the sense lines out through a small
-  connector on the board instead. Whether a connector clears the DropBot's
-  chip drawer was not checked; if it does not, run the board outside the
-  instrument on the connection adapter.
-
-**Put several variants on the first board.** Boards are cheap compared with
-the uncertainty here. Include sites at two or three gaps, with and without
-the coupling pads, plus an open and a shorted site for calibration.
+- Use the thinnest outer copper the board house offers in the actuation
+  area, to reduce the steps droplets have to cross.
+- The pad pattern is in `hardware/external-connection-adapter`
+  (`dropbot-v3-connection-adapter.kicad_pcb`), including the `FB`, `OE` and
+  `GND` pads.
+- Put several site variants on the first board: two or three gaps, plus an
+  open and a shorted site for calibration.
 
 **The cell has to reach the gap.** A 10 µm cell settles at a few micrometres
 per second, so it reaches the board surface in about a minute, but anywhere
@@ -296,8 +332,8 @@ no DropBot channel and not the top plate ever connects to the HF electronics:
 
 - `K1`–`K5` and the jumper matrix are not needed.
 - `K6`–`K8` stay, normally open. They keep the sense electrodes floating
-  during actuation, so the thin Cytop over them never sees the droplet's
-  voltage swing.
+  during actuation, so no actuation current flows through the bare traces
+  into the droplet.
 - The protection networks stay. The fault they now cover is dielectric
   breakdown on the chip, which puts the actuation voltage into the droplet
   and from there onto the sense electrodes.
@@ -614,11 +650,12 @@ Do each step before the next. Stop if a pass condition fails.
   but the absolute numbers will move.
 - The op-amp in the simulations is a generic two-pole model, not the vendor
   macromodel.
-- **PCB sense site (section 3.1).** The signal sizes are parallel-plate upper
-  bounds, not field simulations. The board house's minimum space, the Cytop
-  thickness over copper steps, the method for keeping Parylene off the site,
-  and the clearance for a connector in the DropBot's chip drawer are all
-  open.
+- **PCB sense site (sections 3.1–3.3).** The signal sizes are parallel-plate
+  upper bounds, not field simulations. Board-house limits come from published
+  capability tables found by web search, not from a quote, and those tables
+  disagree in places. Laser opening of the coatings, the life of the gold
+  finish in saline, the actuation voltage a coated board will need, and the
+  clearance for a connector in the DropBot's chip drawer are all open.
 
 ## 11. Files
 

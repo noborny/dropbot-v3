@@ -111,33 +111,48 @@ def pcb_sense_site():
     (no Parylene over the sense site).
     """
     eps0 = 8.854e-12
-    h_cu = 35e-6               # finished copper thickness
     length = 150e-6            # facing length of the two traces
     t_cytop, eps_cytop = 100e-9, 2.1
     t_par, eps_par = 5e-6, 3.1
     c_cytop = eps0 * eps_cytop / t_cytop      # F/m^2
     c_par = eps0 * eps_par / t_par
-    print("\nPCB sense site (copper %.0f um, facing length %.0f um)"
-          % (h_cu * 1e6, length * 1e6))
+    # (gap, finished copper thickness, fabrication class).  Finer spacing
+    # needs thinner copper, so the trench gets shallower as the gap shrinks.
+    sites = ((127e-6, 35e-6, "2-layer prototype (5 mil)"),
+             (100e-6, 35e-6, "standard multilayer (4 mil)"),
+             (90e-6, 35e-6, "prototype multilayer (3.5 mil)"),
+             (75e-6, 35e-6, "advanced (3 mil)"),
+             (50e-6, 18e-6, "HDI, thin copper (2 mil)"),
+             (30e-6, 15e-6, "mSAP / substrate-like"))
+    print("\nPCB sense site (facing length %.0f um)" % (length * 1e6))
     print("  coupling through 100 nm Cytop: %.0f pF/mm2; through 5 um "
           "Parylene: %.1f pF/mm2" % (c_cytop * 1e6, c_par * 1e6))
-    print("%8s %9s %9s | %25s | %s" % ("gap", "R (PBS)", "R (0.1S/m)",
-                                       "dZ/Z upper bound for cell",
-                                       "temperature equivalent"))
-    print("%8s %9s %9s | %7s %8s %8s |" % ("", "", "", "10 um", "15 um",
-                                         "20 um"))
-    for gap in (100e-6, 75e-6, 50e-6, 25e-6):
+    print("%7s %6s %8s | %8s %8s %8s | %s" % ("gap", "copper", "R (PBS)",
+                                             "10 um", "15 um", "20 um",
+                                             "class"))
+    for gap, h_cu, label in sites:
         h_eff = h_cu + gap / 2
         vol = gap * length * h_eff
         r_pbs = gap / (1.5 * length * h_eff)
-        r_low = gap / (0.1 * length * h_eff)
         dz = [1.5 * (pi / 6 * d ** 3) / vol for d in (10e-6, 15e-6, 20e-6)]
-        print("%6.0fum %7.1fk %8.0fk | %6.2f%% %7.2f%% %7.2f%% | 10 um cell "
-              "= %.2f K drift"
-              % (gap * 1e6, r_pbs / 1e3, r_low / 1e3, dz[0] * 100,
-                 dz[1] * 100, dz[2] * 100, dz[0] / 0.02))
-    print("  wetted area needed per electrode so that the Cytop reactance "
-          "is under 5 kohm:")
+        print("%5.0fum %4.0fum %6.1fk | %7.2f%% %7.2f%% %7.2f%% | %s"
+              % (gap * 1e6, h_cu * 1e6, r_pbs / 1e3, dz[0] * 100,
+                 dz[1] * 100, dz[2] * 100, label))
+    print("  (dZ/Z columns: upper bound on the change from one cell of that "
+          "diameter)")
+
+    # Footprint of a three-electrode site inside an actuation electrode:
+    # three parallel traces, each ending in a pad for a filled, capped via.
+    trace, gap, clr, via_pad, exposed = 0.10, 0.09, 0.09, 0.35, 0.15
+    site_w = 2 * via_pad + clr + 2 * clr
+    site_h = 2 * via_pad + exposed + 2 * clr
+    print("  three traces %.2f mm wide, %.2f mm gaps, %.2f mm via pads: site "
+          "%.2f x %.2f mm" % (trace, gap, via_pad, site_w, site_h))
+    for pitch in (2.2, 3.0):
+        print("    = %.0f%% of a %.1f mm actuation electrode"
+              % (100 * site_w * site_h / pitch ** 2, pitch))
+    print("  if Cytop is left on: wetted area needed per electrode so that "
+          "its reactance is under 5 kohm:")
     for f in (0.5e6, 1e6, 5e6, 10e6):
         area = 1 / (2 * pi * f * 5e3 * c_cytop)
         print("    %4.1f MHz: %.3f mm2" % (f / 1e6, area * 1e6))
