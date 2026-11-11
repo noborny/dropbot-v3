@@ -1,0 +1,69 @@
+* HF transimpedance amplifier: small-signal response and stability check
+*
+* Run:  ngspice -b tia_ac.cir
+*
+* The DUT is modelled as an AC current source with stray capacitance CSRC to
+* ground (electrode + cable), feeding the protection network (CS, RS, clamp
+* capacitance) and then the op-amp summing node.  The op-amp is a two-pole
+* behavioural model; replace it with the vendor macromodel for final checks.
+
+.param RF=10k CF=3.9p CSRC=100p RS=100 CS=4.7n
+.param GBW=230e6 AOL=1e5 FP2=600e6
+
+* --- DUT / stray ---------------------------------------------------------
+IDUT 0 elec AC 1
+CSRC elec 0 {CSRC}
+RLEAK elec 0 1G       ; DC path for the simulator only
+
+* --- protection network --------------------------------------------------
+CS   elec n1 {CS}
+RS   n1 sum {RS}
+CCLP sum 0 3p          ; BAV99 pair at 0 V bias
+CRLY sum 0 2p          ; relay, pads, trace
+
+* --- op-amp: inverting input = sum, non-inverting input = ground ---------
+CINA sum 0 3.5p
+EGAIN a1 0 0 sum {AOL}
+RP1  a1 a2 1k
+CP1  a2 0 {AOL/(2*3.14159265*GBW*1k)}
+EB1  a3 0 a2 0 1
+RP2  a3 a4 1k
+CP2  a4 0 {1/(2*3.14159265*FP2*1k)}
+EOUT o1 0 a4 0 1
+ROUT o1 out 10
+
+* --- feedback ------------------------------------------------------------
+RF out sum {RF}
+CF out sum {CF}
+
+.control
+set noaskquit
+* gain setting: Rf, Cf pairs from tia_design.py (100 pF column)
+foreach gain 1 2 3
+  if $gain = 1
+    alterparam RF = 1k
+    alterparam CF = 12p
+  end
+  if $gain = 2
+    alterparam RF = 10k
+    alterparam CF = 3.9p
+  end
+  if $gain = 3
+    alterparam RF = 100k
+    alterparam CF = 1.2p
+  end
+  foreach cs 20p 100p 300p
+    alterparam CSRC = $cs
+    reset
+    ac dec 200 10k 100meg
+    meas ac zmid find vm(out) at=100k
+    meas ac zpk  max vm(out)
+    let lim = zmid/sqrt(2)
+    meas ac f3db when vm(out)=lim fall=1
+    let pk_db = 20*log10(zpk/zmid)
+    echo "RESULT gain $gain CSRC $cs : Z(100kHz) = $&zmid ohm, peaking = $&pk_db dB, f_-3dB = $&f3db Hz"
+  end
+end
+quit
+.endc
+.end

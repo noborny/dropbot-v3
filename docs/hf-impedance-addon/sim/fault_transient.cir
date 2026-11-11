@@ -1,0 +1,89 @@
+* Worst-case fault: DropBot actuation voltage applied to both HF ports
+*
+* Run:  ngspice -b fault_transient.cir
+*
+* Models the interlock having failed, so that an isolation relay is closed
+* while the electrode it connects is being actuated at the DropBot's maximum
+* output (150 V square wave, 10 kHz).  The source is the control board's
+* half-bridge behind its 100 nF coupling capacitor (C10) and 2 Mohm bleed
+* (R22), plus one AQW214 PhotoMOS switch (~30 ohm).  The series PTC (F1) and
+* ferrite (FB2) are left out, which makes the fault harder than the real one.
+
+.param VHV=150 FREQ=10k TEDGE=50n
+.param CS=4.7n RS=100 RO=49.9
+
+VHB  hb 0 PULSE(0 {VHV} 10u {TEDGE} {TEDGE} {0.5/FREQ-TEDGE} {1/FREQ})
+C10  hb hvac 100n
+R22  hvac 0 2Meg
+RSW  hvac e0 30
+VASRC e0 elec 0         ; ammeter
+
+* --- sense port: electrode -> CS1 -> RS1 -> clamp to ground -> TIA --------
+CS1  elec s1 {CS}
+RS1  s1 s2 {RS}
+VAS  s2 sum 0           ; ammeter
+D1   sum 0 DCLAMP
+D2   0 sum DCLAMP
+RF   sum 0 10k         ; feedback resistor into a saturated op-amp output
+
+* --- stimulus port: electrode -> CS2 -> clamp to rails -> RO -> buffer -----
+CS2  elec t1 {CS}
+RLIM t1 t2 {RS}
+VAT  t2 stim 0          ; ammeter
+D3   stim vp DCLAMP
+D4   vm stim DCLAMP
+RO   stim buf {RO}
+VBUF buf 0 0           ; buffer output held at 0 V (also an ammeter)
+* +/-5 V rails as the AD3 provides them: a source that cannot sink current
+* (series diode), local decoupling, and a 5.6 V zener that absorbs the
+* clamp current.
+VP   vps 0 5
+DP   vps vp DCLAMP
+CP   vp 0 10u
+DZP  0 vp DZ5V6
+ILP  vp 0 15m          ; quiescent load of the board on +5 V
+VM   vms 0 -5
+DM   vm vms DCLAMP
+CM   vm 0 10u
+DZM  vm 0 DZ5V6
+ILM  0 vm 15m
+
+.model DCLAMP D(IS=2.52n RS=0.568 N=1.752 CJO=1.5p M=0.4 TT=4n BV=85 IBV=100u)
+.model DZ5V6  D(IS=1n RS=2 N=1.2 BV=5.6 IBV=5m CJO=150p)
+
+.ic v(vp)=4.4 v(vm)=-4.4
+.tran 5n 4m 3m uic
+
+.control
+set noaskquit
+foreach rs 100 330
+  alterparam RS = $rs
+  reset
+  run
+  echo "RESULT ---- RS = $rs ohm, CS = 4.7 nF, 150 V, 10 kHz ----"
+  meas tran vsum_max max v(sum)
+  meas tran vsum_min min v(sum)
+  meas tran vstim_max max v(stim)
+  meas tran vstim_min min v(stim)
+  meas tran vp_max max v(vp)
+  meas tran vm_min min v(vm)
+  let i_cl = abs(i(VAS))
+  meas tran i_clamp_pk max i_cl
+  meas tran i_clamp_avg avg i_cl
+  let p_rs1 = (v(s1)-v(s2))*i(VAS)
+  meas tran p_rs1_avg avg p_rs1
+  let p_rs2 = (v(t1)-v(t2))*i(VAT)
+  meas tran p_rs2_avg avg p_rs2
+  let i_b = abs(i(VBUF))
+  meas tran i_buf_pk max i_b
+  meas tran i_src_rms rms i(VASRC)
+  echo "RESULT op-amp input node:    $&vsum_min V to $&vsum_max V"
+  echo "RESULT stimulus clamp node:  $&vstim_min V to $&vstim_max V  (rails reach $&vm_min V, $&vp_max V)"
+  echo "RESULT clamp diode current:  $&i_clamp_pk A peak, $&i_clamp_avg A average"
+  echo "RESULT power in RS1 / RS2:   $&p_rs1_avg W / $&p_rs2_avg W"
+  echo "RESULT buffer output current: $&i_buf_pk A peak"
+  echo "RESULT DropBot output current: $&i_src_rms A rms (firmware limit 0.025 A)"
+end
+quit
+.endc
+.end
