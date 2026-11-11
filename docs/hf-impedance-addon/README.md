@@ -287,6 +287,9 @@ sense electrodes are small islands cut out of it, each reached by a feed
 line that runs to a contact pad at the plate edge. Numbers are from
 `ito_sense_site()` in `sim/tia_design.py`, for PBS.
 
+Decided so far: the assembly runs inverted (glass plate at the bottom), and
+the ITO patterning is outsourced.
+
 ```
         main ITO sheet (top plate, grounded, Cytop coated)
    ┌────────────────────────────────────────────────────────┐
@@ -328,18 +331,58 @@ means the sense current is a fraction of the 9 µA that 0.2 V rms would drive
 through 21 kΩ. Expect a few microamps. Use gain setting 2 or 3, and the
 faster op-amp of section 6.3 for the high-frequency point.
 
-**Feed lines must be narrow under the droplet.** A Cytop-coated feed line
-also couples to the droplet, and that path bypasses the gap:
+**Feed lines must be narrow under the droplet.** The feed line is the ITO
+strip that joins a sense electrode to its pad. It is coated with Cytop, which
+insulates it at DC but is so thin that the strip and the droplet form a
+capacitor of 186 pF per square millimetre. Two currents therefore reach the
+amplifier:
+
+```
+ wanted:    STIM electrode ──► liquid in the gap ──► SENSE electrode ──► amplifier
+                               (a cell here changes it)
+
+ unwanted:  STIM feed ══╪══► bulk of the droplet ══╪══► SENSE feed ──► amplifier
+                      Cytop          │           Cytop
+                                     ╪ Cytop, 900 pF
+                                     ▼
+                          grounded top-plate sheet
+```
+
+The unwanted current never passes through the gap, so a cell does not change
+it. It is a background that dilutes the cell's fractional signal, rises with
+frequency, and shifts whenever the droplet covers a different length of
+feed.
+
+The grounded sheet takes most of it. The stimulus feed and the sheet form a
+capacitive divider, so the bulk of the droplet only reaches
+`C_feed / (C_feed + C_sheet)` of the stimulus voltage. The sense feed then
+picks that small voltage up through its own capacitance:
+
+```
+I_bypass ≈ V_stim · C_feed / (C_feed + C_sheet) · 2πf · C_feed
+```
+
+Feed capacitance appears twice, so the bypass goes as the square of the feed
+width and of the length under the droplet. Worked for a 20 µm feed, 1.1 mm
+under the droplet, at 10 MHz: the feed is 0.022 mm², so 4.1 pF. The droplet
+bulk sits at 4.1 / 904 = 0.45 % of the stimulus. The sense feed's 4.1 pF is
+3.9 kΩ at 10 MHz, so the bypass is 1.2 µA per volt, against 48 µA per volt
+through a 21 kΩ gap: 2.4 %.
 
 | Feed width | Feed resistance at 10 / 20 Ω/sq | Bypass current relative to gap current at 0.5 / 1 / 5 / 10 MHz |
 |---|---|---|
 | 10 µm | 1.1 / 2.2 kΩ | 0.0 / 0.1 / 0.3 / 0.6 % |
 | 20 µm | 550 Ω / 1.1 kΩ | 0.1 / 0.2 / 1.2 / 2.4 % |
+| 30 µm | 370 / 730 Ω | 0.3 / 0.5 / 2.7 / 5.5 % |
 | 50 µm | 220 / 440 Ω | 0.8 / 1.5 / 7.6 / 15 % |
 | 200 µm | 55 / 110 Ω | 12 / 23 / 117 / 235 % |
 
-For a 1.1 mm run under the droplet. Use 20 µm feeds under the droplet and
-widen them to a millimetre as soon as they are clear of it. Choose ITO of
+For a 1.1 mm run under the droplet. The comparison is with the full gap
+current; the sense electrode collects only part of that, so the true ratios
+are a few times higher than the table. Narrower is not free either: the feed
+resistance adds to the site resistance and dilutes the signal the same way.
+Use 20 µm feeds under the droplet (30 µm if that is the patterning vendor's
+limit) and widen them to a millimetre as soon as they are clear of it. Choose ITO of
 8–12 Ω/sq to keep the feed resistance small against the site resistance.
 Place the site over an electrode at the edge of the array, so that the feeds
 do not pass over other droplets on their way out.
@@ -378,6 +421,14 @@ sheet: connected to the DropBot `FB` line normally, and switched to the HF
 board's ground during a measurement. The DropBot's sense input is a poor
 ground at megahertz frequencies, and the guard only works if the sheet is
 well grounded.
+
+**What to ask a patterning vendor.** Minimum isolation gap and minimum
+remaining line width on ITO of the chosen thickness, with a micrograph;
+whether the gap is electrically open (ask for a resistance figure);
+placement accuracy over the plate; and whether they can also supply the ITO
+glass cut to size. A 30 µm gap and 30 µm feeds are an acceptable fallback:
+the cell signal drops to about 3 % upper bound and the bypass stays near 5 %
+at 10 MHz.
 
 **Can it be made?**
 

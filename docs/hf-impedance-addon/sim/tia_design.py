@@ -217,7 +217,7 @@ def ito_sense_site():
                                                                 "20 ohm/sq"))
     print("%8s %10s %10s | %7s %7s %7s %7s" % ("", "", "", "0.5 MHz",
                                                "1 MHz", "5 MHz", "10 MHz"))
-    for w in (10e-6, 20e-6, 50e-6, 200e-6):
+    for w in (10e-6, 20e-6, 30e-6, 50e-6, 200e-6):
         c_f = c_cytop * w * l_feed
         row = []
         for f in (0.5e6, 1e6, 5e6, 10e6):
