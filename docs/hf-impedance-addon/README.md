@@ -471,7 +471,7 @@ For the differential site of section 3.1, build two identical channels
 (`CS`, `RS`, clamp, `U1`, feedback) with matched layout and 0.1 % feedback
 resistors. In PBS the site resistance is a few kilohms. At 0.2 V rms drive,
 setting 2 gives about 0.4 V rms out and reaches about 4 MHz. For 10 MHz use
-setting 1 (about 40 mV out) or the OPA657 option below.
+setting 1 (about 40 mV out) or the OPA657 option above.
 
 Setting C makes the amplifier a charge amplifier like the DropBot's own. With
 a capacitive load a resistive setting gives an output that rises with
