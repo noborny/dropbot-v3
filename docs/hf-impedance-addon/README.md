@@ -28,6 +28,11 @@ been built or measured. Section 10 lists what could not be verified.
    electronics.** Through a standard actuation electrode the measurement sees
    the dielectric layer and almost nothing of the droplet contents. Single-cell
    detection needs a dedicated micro-electrode pair on the chip (section 3).
+6. **With a PCB electrode board the add-on gets simpler.** A dedicated sense
+   site on the board never connects to a DropBot channel, so most of the
+   changeover relays disappear (sections 3.1 and 4.1). The price is that a
+   board house's minimum gap is larger than a cell, so the signal is small
+   and the measurement has to be differential.
 
 ## 2. What the existing hardware does
 
@@ -137,6 +142,107 @@ does not). The 10 MHz capability is what makes that ratio possible.
 The electronics below serve all three. Build C into the chip if single cells
 are the goal.
 
+### 3.1 Sense site on a PCB electrode board
+
+This applies to an electrode array made as a printed circuit board, coated
+with Parylene by the board house and with spin-coated Cytop on top. Numbers
+are from `pcb_sense_site()` in `sim/tia_design.py`.
+
+**The gap is set by the board house.** Two copper traces facing each other
+across the minimum space form the sense pair. The 35 µm copper thickness
+helps: the trench between the traces is a region of nearly uniform field that
+a settled cell can sit in.
+
+| Gap | Typical board class | Resistance in PBS | Upper bound on change from one cell: 10 / 15 / 20 µm |
+|---|---|---|---|
+| 100 µm | standard (4 mil) | 5.2 kΩ | 0.06 / 0.21 / 0.49 % |
+| 75 µm | standard (3 mil) | 4.6 kΩ | 0.10 / 0.32 / 0.77 % |
+| 50 µm | HDI (2 mil) | 3.7 kΩ | 0.17 / 0.59 / 1.40 % |
+| 25 µm | specialist | 2.3 kΩ | 0.44 / 1.49 / 3.53 % |
+
+Assumes a 150 µm facing length and a cell centred in the gap. Real values
+will be several times lower. Ask the board house for its true minimum space on
+the outer layer at the copper weight you choose.
+
+**Noise is not the limit, drift is.** At 0.2 V rms a 75 µm site carries about
+40 µA, so 0.1 % is 40 nA against a 60 pA noise floor. But 0.1 % is also what
+a 0.05 °C temperature change does to the electrolyte. A single pair cannot
+tell the two apart. Use three electrodes:
+
+```
+   ┌─────────┐  gap  ┌──────┐  gap  ┌─────────┐
+   │ SENSE A │       │ STIM │       │ SENSE B │
+   └─────────┘       └──────┘       └─────────┘
+```
+
+Drive `STIM`, put one amplifier on each sense electrode, and take the complex
+ratio of the two amplifier outputs. Temperature, conductivity, evaporation
+and stimulus amplitude are common to both gaps and cancel. A cell in one gap
+does not. The static imbalance between the gaps is measured once with a
+cell-free droplet. This needs a second amplifier channel (section 6.3) and
+uses both scope inputs (section 7).
+
+**Parylene must not cover the sense site.** Coupling through 5 µm of
+Parylene is 5.5 pF/mm², which on electrodes this small hides the liquid
+completely at every frequency the Analog Discovery reaches. Either have the coater mask the site (tape masks are
+accurate to about a millimetre, so the window will be large) or have a small
+window laser-ablated afterwards. Surround the window with a grounded guard
+trace so that no actuation electrode edge is inside it.
+
+**Cytop over the sense site is acceptable only with enough area.** A 100 nm
+Cytop film couples at 186 pF/mm². For its reactance to stay under 5 kΩ each
+electrode needs this much wetted area:
+
+| Frequency | Wetted area per electrode |
+|---|---|
+| 0.5 MHz | 0.34 mm² |
+| 1 MHz | 0.17 mm² |
+| 5 MHz | 0.034 mm² |
+| 10 MHz | 0.017 mm² |
+
+A 100 µm trace with a 150 µm facing edge offers about 0.02 mm², enough only
+at 10 MHz. For the low-frequency half of a dual-frequency measurement, widen
+each sense electrode behind its tip into a pad of 0.2–0.4 mm², or keep Cytop
+off the sense electrodes and use them as bare gold. Thicker Cytop needs
+proportionally more area, and spin coating over 35 µm copper steps will not
+give a uniform film, so measure rather than assume.
+
+**Board stack-up.**
+
+- Route the three sense lines on an inner layer between two ground planes,
+  from the site to their own connector. This shields them from the 150 V
+  actuation edges on the electrode layer.
+- Keep the top-plate (`FB`) connection away from every electrode trace.
+  Capacitance between them adds to every DropBot reading.
+- Use filled and capped vias in the electrode pads, the thinnest outer copper
+  the board house offers for the actuation area, and a gold finish (ENIG) so
+  the sense electrodes are inert.
+- The pad pattern that the DropBot's pogo pins expect is in
+  `hardware/external-connection-adapter` (`dropbot-v3-connection-adapter.kicad_pcb`).
+  It includes the `FB`, `OE` and `GND` pads.
+- The DropBot's four spare pogo pins give only two nets, one short of the
+  three a differential site needs. Bring the sense lines out through a small
+  connector on the board instead. Whether a connector clears the DropBot's
+  chip drawer was not checked; if it does not, run the board outside the
+  instrument on the connection adapter.
+
+**Put several variants on the first board.** Boards are cheap compared with
+the uncertainty here. Include sites at two or three gaps, with and without
+the coupling pads, plus an open and a shorted site for calibration.
+
+**The cell has to reach the gap.** A 10 µm cell settles at a few micrometres
+per second, so it reaches the board surface in about a minute, but anywhere
+under the droplet. Options are to shrink the droplet footprint around the
+site, to sweep the droplet across the site, or to pull the cell into the gap
+by positive dielectrophoresis from the same electrodes (a few volts at
+megahertz frequencies, which needs a low-conductivity buffer). None of these
+has been evaluated here.
+
+**Alternative: sense electrodes on the top plate.** The top plate carries
+only Cytop, and thin-film gold or laser-scribed ITO on glass reaches 10–20 µm
+gaps, which gives a signal ten or more times larger. It costs a patterning
+step and a way to contact the top plate.
+
 ## 4. Architecture
 
 ```
@@ -169,6 +275,41 @@ connector: `FB` on pin 3, `OE` on pin 4, `GND` on pins 5 and 9. The carrier
 replaces the external chip holder at the far end of the Samtec cables, so the
 relays and the amplifier sit within a few centimetres of the chip and the
 cable capacitance stays on the DropBot side of the relays.
+
+### 4.1 Simplified architecture for dedicated sense electrodes
+
+If the only HF measurement is at dedicated sense sites (configuration C),
+no DropBot channel and not the top plate ever connects to the HF electronics:
+
+```
+ DropBot v3 (unmodified)            PCB electrode board                 HF front end (new)
+┌──────────────────────┐        ┌──────────────────────────┐        ┌──────────────────────┐
+│ 120 channels ────────┼────────┼─► actuation electrodes   │        │                      │
+│ FB ──────────────────┼────────┼─► top plate              │        │                      │
+│ OE, GND ─────────────┼────────┼─► OE link (2-pin header) ┼────────┼─ K0 (optional)       │
+└──────────────────────┘        │                          │        │                      │
+                                │   STIM ──────────────────┼────────┼─ K6 ─ prot. ─ buffer │◄─ W1
+                                │   SENSE A ───────────────┼────────┼─ K7 ─ prot. ─ TIA A  ├─► scope 1
+                                │   SENSE B ───────────────┼────────┼─ K8 ─ prot. ─ TIA B  ├─► scope 2
+                                └──────────────────────────┘        └──────────────────────┘
+```
+
+- `K1`–`K5` and the jumper matrix are not needed.
+- `K6`–`K8` stay, normally open. They keep the sense electrodes floating
+  during actuation, so the thin Cytop over them never sees the droplet's
+  voltage swing.
+- The protection networks stay. The fault they now cover is dielectric
+  breakdown on the chip, which puts the actuation voltage into the droplet
+  and from there onto the sense electrodes.
+- The `OE` interlock becomes optional, because no relay can connect an HF
+  port to an actuated line. Fit the 2-pin header in the `OE` link anyway; it
+  costs nothing and allows the interlock to be added.
+- The DropBot's capacitance sensing is untouched and stays available at all
+  times.
+
+Start with the high voltage off during HF measurements. Measuring while a
+droplet is held is possible in principle, but each actuation edge couples a
+charge pulse into the amplifiers through the droplet.
 
 If the chip must stay inside the DropBot, the only uncommitted contacts are
 the `CH-X1`/`CH-X2` spare pogo pins, reachable at front-panel `P5` pins 2
@@ -326,6 +467,12 @@ To reach 10 MHz at 10 kΩ, fit an OPA657 in the same footprint (1.6 GHz
 gain-bandwidth, stable only for noise gains of 7 or more, which this circuit
 provides) with `Cf` near 0.75 pF for a 20 pF source. Do this after the OPA656 version works.
 
+For the differential site of section 3.1, build two identical channels
+(`CS`, `RS`, clamp, `U1`, feedback) with matched layout and 0.1 % feedback
+resistors. In PBS the site resistance is a few kilohms. At 0.2 V rms drive,
+setting 2 gives about 0.4 V rms out and reaches about 4 MHz. For 10 MHz use
+setting 1 (about 40 mV out) or the OPA657 option below.
+
 Setting C makes the amplifier a charge amplifier like the DropBot's own. With
 a capacitive load a resistive setting gives an output that rises with
 frequency, and 1 V into 27 pF is already 1.7 mA at 10 MHz.
@@ -385,7 +532,7 @@ the amplifier's frequency response from the result.
 |---|---|
 | W1 | Stimulus to `U2` input |
 | Scope 1 | Amplifier `OUT` |
-| Scope 2 | `REF` (buffer output) |
+| Scope 2 | `REF` (buffer output), or amplifier B `OUT` for a differential site (jumper) |
 | V+ / V− | +5 V / −5 V |
 | Digital I/O | Relay drivers, optional readbacks |
 
@@ -399,6 +546,10 @@ the amplifier's frequency response from the result.
 - Choose stimulus frequencies that put a whole number of cycles in the
   acquisition record. A 1 ms record gives a noise bandwidth near 1 kHz;
   check the buffer depth available at the sample rate you need.
+- For a differential site the result is the complex ratio of amplifier A to
+  amplifier B. Record it for a cell-free droplet first; a cell shows as a
+  departure from that baseline. Switch scope 2 back to `REF` for calibration
+  and absolute impedance.
 - WaveForms' Network Analyzer does frequency sweeps of that ratio directly.
   For time-resolved or two-tone measurements, record both channels through
   the WaveForms SDK and demodulate in software. For the low/high frequency
@@ -463,6 +614,11 @@ Do each step before the next. Stop if a pass condition fails.
   but the absolute numbers will move.
 - The op-amp in the simulations is a generic two-pole model, not the vendor
   macromodel.
+- **PCB sense site (section 3.1).** The signal sizes are parallel-plate upper
+  bounds, not field simulations. The board house's minimum space, the Cytop
+  thickness over copper steps, the method for keeping Parylene off the site,
+  and the clearance for a connector in the DropBot's chip drawer are all
+  open.
 
 ## 11. Files
 
