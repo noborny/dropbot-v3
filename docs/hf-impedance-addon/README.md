@@ -28,12 +28,18 @@ been built or measured. Section 10 lists what could not be verified.
    electronics.** Through a standard actuation electrode the measurement sees
    the dielectric layer and almost nothing of the droplet contents. Single-cell
    detection needs a dedicated micro-electrode pair on the chip (section 3).
-6. **With a PCB electrode board the add-on gets simpler.** A dedicated sense
-   site on the board never connects to a DropBot channel, so most of the
-   changeover relays disappear (sections 3.1 and 4.1). The price is that a
-   board house's minimum gap is larger than a cell, so the signal is small
-   and the measurement has to be differential. Section 3.2 checks each
-   dimension against what board houses publish.
+6. **Dedicated sense electrodes make the add-on simpler.** They never connect
+   to a DropBot channel, so most of the changeover relays disappear
+   (section 4.1).
+7. **Preferred layout: PCB electrode board below, sense electrodes patterned
+   in an ITO-on-glass top plate (section 3.4).** A 20 µm gap in ITO gives a
+   signal roughly a hundred times larger than a 90 µm gap on the board. Two
+   things follow: cells sink away from a top plate, so the assembly has to
+   be inverted or the cells floated, and the feed lines to the sense
+   electrodes must be narrow where the droplet covers them.
+8. Sense electrodes on the board itself remain an alternative (sections
+   3.1–3.3). Section 3.2 checks each board dimension against what board
+   houses publish.
 
 ## 2. What the existing hardware does
 
@@ -274,10 +280,118 @@ by positive dielectrophoresis from the same electrodes (a few volts at
 megahertz frequencies, which needs a low-conductivity buffer). None of these
 has been evaluated here.
 
-**Alternative: sense electrodes on the top plate.** The top plate carries
-only Cytop, and thin-film gold or laser-scribed ITO on glass reaches 10–20 µm
-gaps, which gives a signal ten or more times larger. It costs a patterning
-step and a way to contact the top plate.
+### 3.4 Sense electrodes in an ITO top plate (preferred)
+
+The top plate is ITO on glass. Most of the ITO stays as the top plate. The
+sense electrodes are small islands cut out of it, each reached by a feed
+line that runs to a contact pad at the plate edge. Numbers are from
+`ito_sense_site()` in `sim/tia_design.py`, for PBS.
+
+```
+        main ITO sheet (top plate, grounded, Cytop coated)
+   ┌────────────────────────────────────────────────────────┐
+   │                                                        │
+   │   feed A ════════╗                  ╔════════ feed B   │──► pads at
+   │                  ║ gap        gap   ║                  │    plate edge
+   │               [SENSE A]  [STIM]  [SENSE B]             │
+   │                             ║                          │
+   │                             ╚════════════ feed S       │
+   │        window in the Cytop over the three electrodes   │
+   └────────────────────────────────────────────────────────┘
+```
+
+**Signal.** Facing length 30 µm:
+
+| Gap | Electrode depth | Site resistance | Upper bound on change from one 10 µm cell | Usable above |
+|---|---|---|---|---|
+| 20 µm | 20 µm | 28 kΩ | 6.5 % | 370 kHz |
+| 20 µm | 60 µm | 21 kΩ | 6.5 % | 170 kHz |
+| 30 µm | 90 µm | 21 kΩ | 2.9 % | 110 kHz |
+| 50 µm | 150 µm | 21 kΩ | 1.0 % | 70 kHz |
+
+"Usable above" is where the polarisation of bare ITO stops dominating,
+assuming 5 µF/cm². The cell's membrane stops blocking current near 1.4 MHz
+in PBS. So the low-frequency point of a dual-frequency measurement sits
+around 400–500 kHz and the high one at 5–10 MHz, and an electrode about three
+gaps deep is worth having. Real cell signals will be several times below the
+upper bound, which still leaves them ten times or more above a 90 µm gap on
+the board.
+
+Keep the three-electrode differential layout of section 3.1. It costs nothing
+extra in a patterned film.
+
+**The grounded sheet is a guard.** The main ITO sheet covers the droplet and
+couples to it through the Cytop at about 900 pF, so it holds the bulk of the
+droplet near ground. Only current that crosses the gap directly reaches a
+sense electrode. This is what confines the measurement to the gap, and it
+means the sense current is a fraction of the 9 µA that 0.2 V rms would drive
+through 21 kΩ. Expect a few microamps. Use gain setting 2 or 3, and the
+faster op-amp of section 6.3 for the high-frequency point.
+
+**Feed lines must be narrow under the droplet.** A Cytop-coated feed line
+also couples to the droplet, and that path bypasses the gap:
+
+| Feed width | Feed resistance at 10 / 20 Ω/sq | Bypass current relative to gap current at 0.5 / 1 / 5 / 10 MHz |
+|---|---|---|
+| 10 µm | 1.1 / 2.2 kΩ | 0.0 / 0.1 / 0.3 / 0.6 % |
+| 20 µm | 550 Ω / 1.1 kΩ | 0.1 / 0.2 / 1.2 / 2.4 % |
+| 50 µm | 220 / 440 Ω | 0.8 / 1.5 / 7.6 / 15 % |
+| 200 µm | 55 / 110 Ω | 12 / 23 / 117 / 235 % |
+
+For a 1.1 mm run under the droplet. Use 20 µm feeds under the droplet and
+widen them to a millimetre as soon as they are clear of it. Choose ITO of
+8–12 Ω/sq to keep the feed resistance small against the site resistance.
+Place the site over an electrode at the edge of the array, so that the feeds
+do not pass over other droplets on their way out.
+
+**The sense electrodes must be bare.** As on the board, Cytop over
+electrodes this small blocks the measurement. Open a window in the Cytop
+over the three electrodes. Anything from 60 µm to 200 µm across works; a
+larger window exposes some feed line, which enlarges the sensed region
+somewhat. Fluoropolymer lift-off is the established way to do this on a
+digital microfluidic top plate.
+
+**Cells sink, and the sense electrodes are on the ceiling.** The field of a
+20 µm gap reaches about 20 µm into the liquid. A cell resting on the bottom
+plate, 150 µm or more away, is invisible. Two ways round it:
+
+- Invert the assembly: glass plate at the bottom, electrode board on top,
+  facing down. Droplets are held by surface tension and do not care. This
+  needs the board to run outside the DropBot on the connection adapter. It
+  also puts the transparent plate under the droplet, where an inverted
+  microscope can confirm what the impedance reports.
+- Float the cells with a density medium such as iodixanol. One published
+  droplet study used 18 % OptiPrep to make cells neutrally buoyant; floating
+  them takes somewhat more. It changes conductivity and viscosity.
+
+Either way the cell still has to end up in the gap, not just on the right
+surface (see the end of section 3.3).
+
+**Top-plate connections.** Four contacts are needed: the main sheet and three
+feeds. Carry them from pads on the electrode board to pads on the plate with
+spring contacts or conductive elastomer, and route them on the board's
+shielded inner layer to the sense connector. Silver paint on the ITO pads
+improves the contact.
+
+In the simplified architecture of section 4.1, add one relay for the main
+sheet: connected to the DropBot `FB` line normally, and switched to the HF
+board's ground during a measurement. The DropBot's sense input is a poor
+ground at megahertz frequencies, and the guard only works if the sheet is
+well grounded.
+
+**Can it be made?**
+
+| Feature | Size | Finding | Verdict |
+|---|---|---|---|
+| ITO glass | 0.7 or 1.1 mm, 8–12 Ω/sq | Catalogue item from several suppliers | Possible |
+| Gap and feed width | 20 µm | A 20 µm scribe in 120 nm ITO with a 355 nm laser is in a laser maker's application note; 11 µm is reported with an excimer laser. One catalogue supplier's patterning service quotes ±50 µm | Possible from a specialist laser service or by photolithography and wet etching. Not from a catalogue patterning service |
+| Gap | 30–50 µm | Easier for the same processes | Possible, with a smaller signal |
+| Window in the hydrophobic layer | 60–200 µm | Lift-off of Teflon AF exposing 1 mm sites on an ITO top plate is published, for impedance sensing of adherent cells. No Cytop lift-off recipe and no window this small was found | Unverified |
+| Plate-to-board contacts | 4 | Not designed | Open |
+
+Photolithography with wet etching of ITO is a routine cleanroom process and
+resolves well below 20 µm; that statement is from general knowledge and was
+not checked against a source.
 
 ## 4. Architecture
 
@@ -315,13 +429,14 @@ cable capacitance stays on the DropBot side of the relays.
 ### 4.1 Simplified architecture for dedicated sense electrodes
 
 If the only HF measurement is at dedicated sense sites (configuration C),
-no DropBot channel and not the top plate ever connects to the HF electronics:
+no DropBot channel ever connects to the HF electronics:
 
 ```
- DropBot v3 (unmodified)            PCB electrode board                 HF front end (new)
+ DropBot v3 (unmodified)         PCB electrode board + top plate         HF front end (new)
 ┌──────────────────────┐        ┌──────────────────────────┐        ┌──────────────────────┐
 │ 120 channels ────────┼────────┼─► actuation electrodes   │        │                      │
-│ FB ──────────────────┼────────┼─► top plate              │        │                      │
+│ FB ──────────────────┼────────┼───────────────────── NC ─┼────────┼─ K5 ─ NO ─ ground    │
+│                      │        │   top plate sheet ── COM ┼────────┼─┘                    │
 │ OE, GND ─────────────┼────────┼─► OE link (2-pin header) ┼────────┼─ K0 (optional)       │
 └──────────────────────┘        │                          │        │                      │
                                 │   STIM ──────────────────┼────────┼─ K6 ─ prot. ─ buffer │◄─ W1
@@ -330,7 +445,11 @@ no DropBot channel and not the top plate ever connects to the HF electronics:
                                 └──────────────────────────┘        └──────────────────────┘
 ```
 
-- `K1`–`K5` and the jumper matrix are not needed.
+- `K1`–`K4` and the jumper matrix are not needed.
+- `K5` is needed only when the sense electrodes are in the top plate
+  (section 3.4). It moves the top-plate sheet from the DropBot `FB` line to
+  the HF board's ground for the measurement. `FB` is not a high-voltage
+  line. With `K5` switched the DropBot simply reads no capacitance.
 - `K6`–`K8` stay, normally open. They keep the sense electrodes floating
   during actuation, so no actuation current flows through the bare traces
   into the droplet.
@@ -656,6 +775,12 @@ Do each step before the next. Stop if a pass condition fails.
   disagree in places. Laser opening of the coatings, the life of the gold
   finish in saline, the actuation voltage a coated board will need, and the
   clearance for a connector in the DropBot's chip drawer are all open.
+- **ITO top-plate sense site (section 3.4).** The signal, guard and bypass
+  figures are lumped estimates, not field simulations, and assume 100 nm of
+  Cytop and 5 µF/cm² for bare ITO. Patterning limits come from an
+  application note and the literature, not from a vendor quote. Opening a
+  small window in Cytop, the plate-to-board contacts, running the assembly
+  inverted and floating cells with a density medium are all untested here.
 
 ## 11. Files
 

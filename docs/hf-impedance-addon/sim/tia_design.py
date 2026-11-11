@@ -100,6 +100,7 @@ def main():
               "%.0f pA rms" % (bw, f / 1e6, n * 1e12))
 
     pcb_sense_site()
+    ito_sense_site()
 
 
 def pcb_sense_site():
@@ -156,6 +157,77 @@ def pcb_sense_site():
     for f in (0.5e6, 1e6, 5e6, 10e6):
         area = 1 / (2 * pi * f * 5e3 * c_cytop)
         print("    %4.1f MHz: %.3f mm2" % (f / 1e6, area * 1e6))
+
+
+def ellip_k(k):
+    """Complete elliptic integral of the first kind, K(k), by the AGM."""
+    a, b = 1.0, sqrt(1 - k * k)
+    for _ in range(40):
+        a, b = (a + b) / 2, sqrt(a * b)
+    return pi / (2 * a)
+
+
+def ito_sense_site():
+    """Sense electrodes patterned in the ITO top plate (../README.md, 3.4).
+
+    Two (or three) bare ITO electrodes face each other across a gap.  The
+    rest of the ITO stays as the grounded top plate and is Cytop coated.
+    Each sense electrode is reached by a narrow, Cytop-coated ITO feed line.
+    """
+    eps0 = 8.854e-12
+    sigma = 1.5                       # PBS [S/m]
+    c_cytop = eps0 * 2.1 / 100e-9     # 100 nm Cytop [F/m2]
+    c_dl = 0.05                       # ITO double layer, 5 uF/cm2 (assumed)
+    cell_d = 10e-6
+    length = 30e-6                    # facing length of the electrodes
+    print("\nITO top-plate sense site (facing length %.0f um, PBS)"
+          % (length * 1e6))
+    print("%6s %6s %8s %12s %14s" % ("gap", "depth", "R site", "10 um cell",
+                                    "usable above"))
+    for gap, depth in ((20e-6, 20e-6), (20e-6, 60e-6), (30e-6, 90e-6),
+                       (50e-6, 150e-6)):
+        k = gap / (gap + 2 * depth)
+        r_site = 2 * ellip_k(k) / ellip_k(sqrt(1 - k * k)) / (sigma * length)
+        vol = length * gap * gap                 # sensed height ~ one gap
+        dz = 1.5 * (pi / 6 * cell_d ** 3) / vol
+        c_pol = c_dl * depth * length / 2        # two electrodes in series
+        f_pol = 1 / (2 * pi * r_site * c_pol)
+        print("%4.0fum %4.0fum %6.1fk %10.1f%% %11.0f kHz"
+              % (gap * 1e6, depth * 1e6, r_site / 1e3, dz * 100, f_pol / 1e3))
+    print("  (cell column: upper bound; 'usable above': where electrode "
+          "polarisation equals the site resistance)")
+
+    # Membrane relaxation of the cell: below this the cell looks insulating.
+    c_mem, s_cyt = 0.01, 0.5
+    f_mem = 1 / (2 * pi * (cell_d / 2) * c_mem * (1 / s_cyt + 1 / (2 * sigma)))
+    print("  membrane relaxation of a 10 um cell in PBS: ~%.1f MHz"
+          % (f_mem / 1e6))
+
+    # Feed lines: resistance, and the path that bypasses the gap by coupling
+    # through the Cytop into the droplet, which the main sheet holds near
+    # ground.
+    k = 20e-6 / (20e-6 + 2 * 60e-6)
+    r_site = 2 * ellip_k(k) / ellip_k(sqrt(1 - k * k)) / (sigma * length)
+    l_feed = 1.1e-3                   # feed length under the droplet
+    c_main = c_cytop * (2.2e-3) ** 2  # main sheet over the droplet
+    print("  feed line under the droplet (%.1f mm long), 20 um / 60 um site:"
+          % (l_feed * 1e3))
+    print("%8s %10s %10s | bypass current / gap current at" % ("width",
+                                                                "10 ohm/sq",
+                                                                "20 ohm/sq"))
+    print("%8s %10s %10s | %7s %7s %7s %7s" % ("", "", "", "0.5 MHz",
+                                               "1 MHz", "5 MHz", "10 MHz"))
+    for w in (10e-6, 20e-6, 50e-6, 200e-6):
+        c_f = c_cytop * w * l_feed
+        row = []
+        for f in (0.5e6, 1e6, 5e6, 10e6):
+            v_bulk = c_f / (c_f + c_main)
+            row.append(v_bulk * 2 * pi * f * c_f * r_site)
+        print("%6.0fum %8.0f R %8.0f R | %6.1f%% %6.1f%% %6.1f%% %6.1f%%"
+              % (w * 1e6, 10 * l_feed / w, 20 * l_feed / w,
+                 row[0] * 100, row[1] * 100, row[2] * 100, row[3] * 100))
+    print("  sense current at 0.2 Vrms: under %.1f uA (part goes to the "
+          "grounded sheet)" % (0.2 / r_site * 1e6))
 
 
 if __name__ == "__main__":
